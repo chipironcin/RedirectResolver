@@ -1,0 +1,37 @@
+{
+  "_comment": "Redirect Resolver — domain configuration file.",
+  "_comment2": "Each entry needs a 'pattern' (WebExtension match pattern) and a human-readable 'label'.",
+  "_comment3": "Set 'enabled' to false to disable an entry without deleting it.",
+  "domains": [
+    {
+      "label": "Twitter / X short links",
+      "pattern": "*://t.co/*",
+      "enabled": true
+    },
+    {
+      "label": "Bitly",
+      "pattern": "*://bit.ly/*",
+      "enabled": false
+    },
+    {
+      "label": "TinyURL",
+      "pattern": "*://tinyurl.com/*",
+      "enabled": false
+    },
+    {
+      "label": "Buffer / buff.ly",
+      "pattern": "*://buff.ly/*",
+      "enabled": false
+    },
+    {
+      "label": "Ow.ly (Hootsuite)",
+      "pattern": "*://ow.ly/*",
+      "enabled": false
+    },
+    {
+      "label": "Rebrand.ly",
+      "pattern": "*://rebrand.ly/*",
+      "enabled": false
+    }
+  ]
+}

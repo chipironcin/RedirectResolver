@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Redirect Resolver</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #111113;
+      --surface: #1a1a1e;
+      --border:  #2a2a30;
+      --text:    #ffffff;
+      --muted:   #6b6b78;
+      --orange:  #f97316;
+      --orange-dim: rgba(249,115,22,0.12);
+      --danger:  #ef4444;
+    }
+
+    body {
+      width: 360px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 13px;
+    }
+
+    /* ── Header ── */
+    .header {
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+    }
+    .header-left { display: flex; align-items: center; gap: 10px; }
+    .logo {
+      width: 30px; height: 30px;
+      background: var(--orange);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; flex-shrink: 0;
+    }
+    .app-name { font-weight: 600; font-size: 14px; }
+    .badge {
+      background: var(--orange-dim);
+      color: var(--orange);
+      font-size: 11px; font-weight: 600;
+      padding: 2px 8px; border-radius: 99px;
+    }
+
+    /* ── Tabs ── */
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+    }
+    .tab {
+      flex: 1; padding: 10px 0;
+      font-size: 12px; font-weight: 500;
+      color: var(--muted); cursor: pointer;
+      background: none; border: none;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+      font-family: inherit;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active { color: var(--orange); border-bottom-color: var(--orange); }
+
+    /* ── Panels ── */
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* ── Stats ── */
+    .stats {
+      display: grid; grid-template-columns: 1fr 1fr;
+      border-bottom: 1px solid var(--border);
+    }
+    .stat {
+      padding: 16px;
+      border-right: 1px solid var(--border);
+    }
+    .stat:last-child { border-right: none; }
+    .stat-value { font-size: 28px; font-weight: 700; line-height: 1; }
+    .stat-label { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+    /* ── Section label ── */
+    .section-label {
+      padding: 12px 16px 8px;
+      font-size: 11px; font-weight: 600;
+      color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px;
+    }
+
+    /* ── History ── */
+    .history { max-height: 220px; overflow-y: auto; }
+
+    .entry {
+      padding: 10px 16px;
+      border-top: 1px solid var(--border);
+      cursor: default;
+    }
+    .entry:hover { background: var(--surface); }
+
+    .entry-from {
+      font-size: 11px; color: var(--muted);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .entry-to {
+      font-size: 12px; color: var(--orange);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      margin: 2px 0; cursor: pointer;
+    }
+    .entry-to:hover { text-decoration: underline; }
+    .entry-time { font-size: 11px; color: var(--muted); }
+
+    .empty {
+      padding: 28px 16px;
+      text-align: center; color: var(--muted); line-height: 1.6;
+    }
+    .empty strong { display: block; color: var(--text); font-size: 14px; margin-bottom: 4px; }
+
+    /* ── Footer ── */
+    .footer {
+      padding: 10px 16px;
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .status {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; color: var(--muted);
+    }
+    .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #22c55e; flex-shrink: 0;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+
+    .btn-text {
+      background: none; border: none;
+      font-family: inherit; font-size: 12px;
+      color: var(--muted); cursor: pointer; padding: 0;
+      transition: color 0.15s;
+    }
+    .btn-text:hover { color: var(--text); }
+
+    /* ── Domains panel ── */
+    .add-row {
+      padding: 12px 16px;
+      display: flex; gap: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .input {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      color: var(--text);
+      font-family: inherit; font-size: 12px;
+      padding: 7px 10px; outline: none;
+      transition: border-color 0.15s;
+    }
+    .input::placeholder { color: var(--muted); }
+    .input:focus { border-color: var(--orange); }
+    .input.error { border-color: var(--danger); }
+
+    .btn-primary {
+      background: var(--orange);
+      border: none; border-radius: 7px;
+      color: #fff; font-family: inherit; font-size: 12px; font-weight: 600;
+      padding: 7px 14px; cursor: pointer;
+      white-space: nowrap; transition: opacity 0.15s;
+    }
+    .btn-primary:hover { opacity: 0.85; }
+
+    .domain-list { max-height: 240px; overflow-y: auto; }
+
+    .domain-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.12s;
+    }
+    .domain-row:hover { background: var(--surface); }
+    .domain-row.disabled .domain-name,
+    .domain-row.disabled .domain-pattern { opacity: 0.4; }
+
+    /* Toggle */
+    .toggle { position: relative; width: 32px; height: 18px; flex-shrink: 0; }
+    .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .toggle-track {
+      position: absolute; inset: 0;
+      background: var(--border); border-radius: 99px; cursor: pointer;
+      transition: background 0.2s;
+    }
+    .toggle input:checked + .toggle-track { background: var(--orange); }
+    .toggle-thumb {
+      position: absolute;
+      width: 12px; height: 12px;
+      background: #fff; border-radius: 50%;
+      top: 3px; left: 3px;
+      pointer-events: none;
+      transition: transform 0.2s;
+    }
+    .toggle input:checked ~ .toggle-thumb { transform: translateX(14px); }
+
+    .domain-info { flex: 1; min-width: 0; }
+    .domain-name { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .domain-pattern { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: ui-monospace, monospace; }
+
+    .btn-del {
+      background: none; border: none;
+      color: var(--muted); font-size: 18px; line-height: 1;
+      cursor: pointer; padding: 2px 4px; flex-shrink: 0;
+      transition: color 0.15s;
+    }
+    .btn-del:hover { color: var(--danger); }
+
+    .domains-footer {
+      padding: 10px 16px;
+      display: flex; justify-content: space-between; align-items: center;
+      border-top: 1px solid var(--border);
+    }
+    .domain-count { font-size: 12px; color: var(--muted); }
+
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--text); font-size: 12px;
+      padding: 7px 14px; border-radius: 8px;
+      opacity: 0; transition: opacity 0.2s;
+      pointer-events: none; white-space: nowrap; z-index: 99;
+    }
+    .toast.show { opacity: 1; }
+    .toast.err  { border-color: var(--danger); color: var(--danger); }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="header-left">
+      <div class="logo">⇢</div>
+      <span class="app-name">Redirect Resolver</span>
+    </div>
+    <span class="badge" id="total-badge">0</span>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="overview">Overview</button>
+    <button class="tab"        data-tab="domains">Domains</button>
+  </div>
+
+  <!-- Overview -->
+  <div class="panel active" id="panel-overview">
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-value" id="stat-total">0</div>
+        <div class="stat-label">Total resolved</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="stat-session">0</div>
+        <div class="stat-label">This session</div>
+      </div>
+    </div>
+
+    <div class="section-label">Recent</div>
+    <div class="history" id="history"></div>
+
+    <div class="footer">
+      <div class="status">
+        <div class="dot"></div>
+        <span id="status-text">Loading…</span>
+      </div>
+      <button class="btn-text" id="clear-btn">Clear history</button>
+    </div>
+  </div>
+
+  <!-- Domains -->
+  <div class="panel" id="panel-domains">
+    <div class="add-row">
+      <input class="input" id="new-pattern" placeholder="*://example.com/*" />
+      <button class="btn-primary" id="btn-add">Add</button>
+    </div>
+    <div class="domain-list" id="domain-list"></div>
+    <div class="domains-footer">
+      <span class="domain-count" id="domain-count"></span>
+      <button class="btn-text" id="btn-reset">Reset to defaults</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script src="popup.js"></script>
+</body>
+</html>
