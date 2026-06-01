@@ -43,6 +43,62 @@
     "ref","referral","source","affiliate","_ga","_gl",
   ]);
 
+  /**
+   * Decodes a URL that contains mixed HTML entities and percent-encoding
+   * into the final clean URL that the browser would actually load.
+   * 
+   * This function handles complex real-world cases like:
+   *   - &amp; → &
+   *   - &#38; → &
+   *   - %26 → &
+   *   - Nested combinations such as &#38;amp%3B → &
+   * 
+   * It repeatedly applies HTML entity decoding and percent-decoding
+   * until no more changes occur.
+   * 
+   * Examples:
+   * 
+   * Input:  "https://example.com?a=1&amp;b=2"
+   * Output: "https://example.com?a=1&b=2"
+   * 
+   * Input:  "https://example.com/search?q=hello%20world&amp;lang=en"
+   * Output: "https://example.com/search?q=hello world&lang=en"
+  */
+  function decodeMixedURL(input) {
+    if (!input || typeof input !== 'string') return input;
+
+    let url = input.trim();
+
+    // Repeated full decoding cycle until no more changes
+    let previous;
+    do {
+        previous = url;
+
+        // 1. Decode HTML entities (&#38;, &amp;, &#x26;, etc.)
+        const textarea = document.createElement('textarea');
+        textarea.innerHTML = url;
+        url = textarea.value;
+
+        // 2. Decode percent-encoding
+        try {
+            url = decodeURIComponent(url);
+        } catch (e) {
+            // If decode fails, try replacing common broken patterns manually
+            url = url.replace(/%26/g, '&')
+                     .replace(/%3B/g, ';')
+                     .replace(/%3D/g, '=');
+        }
+
+    } while (url !== previous && url.length < 2000); // safety limit
+
+    // Final cleanup
+    try {
+        url = decodeURI(url);
+    } catch (e) {}
+
+    return url;
+}
+
   function stripTracking(url) {
     try {
       const u = new URL(url);
@@ -110,30 +166,32 @@
       subtitle.textContent = "Choose how to open this link";
       progressWrap.style.display = "none";
 
-      finalUrlText.textContent = finalUrl;
+      const finalUrlSanitized = decodeMixedURL(finalUrl);
 
-      const noTracking = stripTracking(finalUrl);
-      const noParams   = stripAllParams(finalUrl);
+      finalUrlText.textContent = finalUrlSanitized;
+
+      const noTracking = stripTracking(finalUrlSanitized);
+      const noParams   = stripAllParams(finalUrlSanitized);
 
       // Always show full URL as primary CTA
       variantsEl.appendChild(makeVariantBtn(
-        finalUrl,
+        finalUrlSanitized,
         "Open full URL",
-        finalUrl,
+        finalUrlSanitized,
         true
       ));
 
       // Only show if actually different
-      if (noTracking !== finalUrl) {
+      if (noTracking !== finalUrlSanitized) {
         variantsEl.appendChild(makeVariantBtn(
           noTracking,
-          "Remove tracking parameters",
+          "Remove known tracking parameters",
           noTracking,
           false
         ));
       }
 
-      if (noParams !== finalUrl) {
+      if (noParams !== finalUrlSanitized) {
         variantsEl.appendChild(makeVariantBtn(
           noParams,
           "Remove all parameters",
