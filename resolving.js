@@ -66,9 +66,9 @@
   }
 
   function makeVariantBtn(url, name, desc, primary = false) {
-    const btn = document.createElement("button");
+    const btn = document.createElement("a");
     btn.className = "variant-btn" + (primary ? " primary" : "");
-    btn.addEventListener("click", () => { location.href = url; });
+    btn.href = url;
 
     const left = document.createElement("div");
     left.className = "variant-left";
