@@ -160,6 +160,12 @@ async function reloadConfig() {
 // REDIRECT RESOLUTION
 // ─────────────────────────────────────────────────────────────────────────
 
+// Helper to safely resolve relative URLs
+const safeResolve = (dest, base) => {
+  try { return new URL(dest, base).href; }
+  catch { return dest; }
+};
+
 async function resolveUrl(startUrl, maxHops = 10) {
   if (resolvedCache.has(startUrl)) return resolvedCache.get(startUrl);
 
@@ -169,10 +175,11 @@ async function resolveUrl(startUrl, maxHops = 10) {
   while (hops < maxHops) {
     hops++;
     let response;
+
     try {
       response = await fetch(current, {
         method:      "GET",
-        redirect:    "manual",
+        redirect:    "follow", // Let the browser handle HTTP 3xx hops natively and securely
         credentials: "omit",
         cache:       "no-store",
         // No custom headers — let the browser send its natural defaults.
@@ -184,61 +191,52 @@ async function resolveUrl(startUrl, maxHops = 10) {
       break;
     }
 
-    // With redirect:"manual", the browser never exposes a real 3xx status.
-    // Redirects surface as type "opaqueredirect" with status 0.
-    // A true final response has type "basic" or "cors" with a real 2xx/4xx/5xx.
-    if (response.type === "opaqueredirect") {
-      const loc = response.headers.get("location");
-      if (!loc) break; // redirect with no Location — stop here
-      try { current = new URL(loc, current).href; } catch { current = loc; }
+    // response.url automatically contains the final URL after all HTTP 3xx redirects
+    if (response.url && response.url !== current) {
+      current = response.url;
       continue;
     }
 
-    const { status } = response;
+    const { status, headers } = response;
 
+    // Handle client-side redirects (Meta refresh / JS) inside 2xx HTML responses
     if (status >= 200 && status < 300) {
-      // Could still be a client-side redirect (meta refresh or JS location).
-      // Only parse HTML bodies — skip if too large (>50 KB) to avoid hanging.
-      const ct = response.headers.get("content-type") || "";
-      if (ct.includes("text/html")) {
-        try {
-          const text = await Promise.race([
-            response.text(),
-            new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 3000))
-          ]);
-          // Normalise: collapse whitespace so multi-line attributes are findable
-          const compact = text.slice(0, 50000).replace(/\s+/g, " ");
+      const ct = headers.get("content-type") || "";
+      if (!ct.includes("text/html")) break; // Found final non-HTML destination
 
-          // 1. <meta http-equiv="refresh" content="0; url=https://…">
-          const metaMatch = compact.match(
-            /<meta[^>]+http-equiv=["']?refresh["']?[^>]+content=["']?\d+;\s*url=([^"'>\s]+)/i
-          ) || compact.match(
-            /<meta[^>]+content=["']?\d+;\s*url=([^"'>\s]+)[^>]+http-equiv=["']?refresh["']?/i
-          );
-          if (metaMatch) {
-            const dest = metaMatch[1].replace(/["']/g, "").trim();
-            try { current = new URL(dest, current).href; } catch { current = dest; }
-            continue;
-          }
+      try {
+        // Use AbortController to cleanly handle timeouts without memory leaks
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
 
-          // 2. window.location = "…" / window.location.href = "…" / location.replace("…")
-          const jsMatch = compact.match(
-            /window\.location(?:\.href)?\s*=\s*["']([^"'`]+)["']|location\.replace\s*\(\s*["']([^"'`]+)["']\s*\)/i
-          );
-          if (jsMatch) {
-            const dest = (jsMatch[1] || jsMatch[2]).trim();
-            try { current = new URL(dest, current).href; } catch { current = dest; }
-            continue;
-          }
-        } catch (parseErr) {
-          console.warn("[resolver] body parse error:", parseErr);
+        const text = await response.text({ signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        // Compress whitespace and truncate to prevent regex hanging on massive DOMs
+        const compact = text.slice(0, 50000).replace(/\s+/g, " ");
+
+        // 1. Meta refresh check
+        const metaMatch = compact.match(/<meta[^>]+http-equiv=["']?refresh["']?[^>]+content=["']?\d+;\s*url=([^"'>\s]+)/i) ||
+                          compact.match(/<meta[^>]+content=["']?\d+;\s*url=([^"'>\s]+)[^>]+http-equiv=["']?refresh["']?/i);
+        if (metaMatch) {
+          current = safeResolve(metaMatch[1].replace(/["']/g, "").trim(), current);
+          continue;
         }
+
+        // 2. JS location check
+        const jsMatch = compact.match(/window\.location(?:\.href)?\s*=\s*["']([^"'`]+)["']|location\.replace\s*\(\s*["']([^"'`]+)["']\s*\)/i);
+        if (jsMatch) {
+          current = safeResolve((jsMatch[1] || jsMatch[2]).trim(), current);
+          continue;
+        }
+      } catch (parseErr) {
+        console.warn("[resolver] body parse error:", parseErr);
       }
-      // No client-side redirect found — this is the real final destination
-      break;
+
+      break; // It's HTML, but no client-side redirects were found.
     }
 
-    break; // 4xx / 5xx — accept current as best-effort destination
+    break; // Break on 4xx/5xx
   }
 
   resolvedCache.set(startUrl, current);
