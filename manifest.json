@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Redirect Resolver",
-  "version": "6.0.0",
+  "version": "6.0.1",
   "description": "Intercepts short-links (t.co, bit.ly, and more) and resolves them to their final destination. Configurable domain list.",
   "browser_specific_settings": {
     "gecko": {
