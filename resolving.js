@@ -76,7 +76,7 @@
 
         // 1. Decode HTML entities (&#38;, &amp;, &#x26;, etc.)
         const textarea = document.createElement('textarea');
-        textarea.innerHTML = url;
+        textarea.value = url;
         url = textarea.value;
 
         // 2. Decode percent-encoding
